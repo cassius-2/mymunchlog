@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Star, Calendar, MapPin, Edit2, Trash2, X, ExternalLink, LogOut } from 'lucide-react';
 import { supabase, Restaurant } from './lib/supabase';
-
 interface User {
   id: string;
-  email: string;
+  email?: string;
 }
-
 const useGooglePlaces = (inputRef: React.RefObject<HTMLInputElement>) => {
   const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
 
@@ -89,7 +87,11 @@ const App: React.FC = () => {
   }, [autocomplete]);
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    setUser(session?.user ?? null);
+    if (session?.user) {
+  setUser({ id: session.user.id, email: session.user.email });
+} else {
+  setUser(null);
+}
     setLoading(false);
   };
 
@@ -116,12 +118,12 @@ const App: React.FC = () => {
       if (error) {
         setAuthError(error.message);
       } else {
-        setUser(data.user);
+        setUser({ id: data.user.id, email: data.user.email });
         setAuthEmail('');
         setAuthPassword('');
       }
     } else {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: authEmail,
         password: authPassword
       });

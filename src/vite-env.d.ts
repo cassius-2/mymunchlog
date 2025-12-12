@@ -1,4 +1,4 @@
-/// <reference types="vite/client" />
+  /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
@@ -15,3 +15,5 @@ declare global {
     google: typeof google;
   }
 }
+
+export {};
