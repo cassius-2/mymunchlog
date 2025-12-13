@@ -6,11 +6,12 @@ interface User {
   email?: string;
 }
 const useGooglePlaces = (inputRef: React.RefObject<HTMLInputElement>) => {
-  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+  const [autocomplete, setAutocomplete] = useState<any>(null);
 
   useEffect(() => {
-    if (!inputRef.current || !window.google) return;
+    if (!inputRef.current || !(window as any).google) return;
 
+    const google = (window as any).google;
     const ac = new google.maps.places.Autocomplete(inputRef.current, {
       types: ['restaurant', 'cafe', 'bar', 'food', 'establishment'],
       fields: ['name', 'formatted_address', 'place_id', 'rating', 'photos', 'geometry']
@@ -21,7 +22,6 @@ const useGooglePlaces = (inputRef: React.RefObject<HTMLInputElement>) => {
 
   return autocomplete;
 };
-
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
