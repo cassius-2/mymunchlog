@@ -1,4 +1,4 @@
-  /// <reference types="vite/client" />
+/// <reference types="vite/client" />
 
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
@@ -8,6 +8,18 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv
+}
+
+declare namespace google {
+  namespace maps {
+    namespace places {
+      class Autocomplete {
+        constructor(input: HTMLInputElement, options?: any);
+        addListener(eventName: string, handler: () => void): void;
+        getPlace(): any;
+      }
+    }
+  }
 }
 
 declare global {
