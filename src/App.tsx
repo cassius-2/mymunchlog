@@ -35,9 +35,7 @@ const App: React.FC = () => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>('');
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
-  const [currentAutocomplete, setCurrentAutocomplete] = useState<any>(null);
-
-const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
 
 useEffect(() => {
     // 1. Check if script is already loaded from a previous session
@@ -547,12 +545,12 @@ useEffect(() => {
                           </div>
                       )}
                       
-                      {restaurant.google_rating > 0 && (
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <span>Google:</span>
-                          <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                          <span>{restaurant.google_rating.toFixed(1)}</span>
-                        </div>
+                      {(restaurant.google_rating || 0) > 0 && (
+                          <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <span>Google:</span>
+                              <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                              <span>{(restaurant.google_rating || 0).toFixed(1)}</span>
+                          </div>
                       )}
                       <div className="flex items-center gap-1 text-sm text-gray-600">
                         <Calendar className="w-4 h-4" />
