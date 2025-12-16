@@ -5,23 +5,7 @@ interface User {
   id: string;
   email?: string;
 }
-const useGooglePlaces = (inputRef: React.RefObject<HTMLInputElement>) => {
-  const [autocomplete, setAutocomplete] = useState<any>(null);
 
-  useEffect(() => {
-    if (!inputRef.current || !(window as any).google) return;
-
-    const google = (window as any).google;
-    const ac = new google.maps.places.Autocomplete(inputRef.current, {
-      types: ['restaurant', 'cafe', 'bar', 'food', 'establishment'],
-      fields: ['name', 'formatted_address', 'place_id', 'rating', 'photos', 'geometry']
-    });
-
-    setAutocomplete(ac);
-  }, [inputRef]);
-
-  return autocomplete;
-};
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -41,6 +25,7 @@ const App: React.FC = () => {
     date_visited: new Date().toISOString().split('T')[0],
     dishes_ordered: '',
     rating: 5,
+    value_rating: 5,
     notes: '',
     google_place_id: '',
     google_rating: 0,
@@ -50,8 +35,35 @@ const App: React.FC = () => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>('');
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
-  const autocomplete = useGooglePlaces(autocompleteInputRef);
+  const [currentAutocomplete, setCurrentAutocomplete] = useState<any>(null);
 
+const [scriptLoaded, setScriptLoaded] = useState(false);
+
+useEffect(() => {
+    // 1. Check if script is already loaded from a previous session
+    if ((window as any).google && (window as any).google.maps) {
+        setScriptLoaded(true);
+        return;
+    }
+
+    // 2. If not loaded, create and append the script
+    if (!document.getElementById('google-maps-script')) {
+        const script = document.createElement('script');
+        script.id = 'google-maps-script';
+        // Added '&v=beta' for better support of the new PlaceAutocompleteElement
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_PLACES_API_KEY}&libraries=places&v=beta`;
+        script.async = true;
+        script.defer = true;
+        
+        // 3. This is the key fix: Wait for the script to finish loading
+        script.onload = () => {
+            setScriptLoaded(true);
+        };
+        
+        document.head.appendChild(script);
+    }
+}, []);
+  
   useEffect(() => {
     checkUser();
   }, []);
@@ -62,29 +74,65 @@ const App: React.FC = () => {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (!autocomplete) return;
 
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (!place.place_id) return;
+// App.tsx - Replace the Autocomplete useEffect with this version
+useEffect(() => {
+    // 1. Safety Checks: Now we also check !scriptLoaded
+    if (!showAddModal || !autocompleteInputRef.current || !scriptLoaded) return;
 
-      const photoUrl = place.photos?.[0]?.getUrl({ maxWidth: 400 }) || '';
-      const mapsUrl = `https://maps.google.com/?q=place_id:${place.place_id}`;
+    const google = (window as any).google;
+    // Extra safety check for the specific class we need
+    if (!google || !google.maps || !google.maps.places || !google.maps.places.PlaceAutocompleteElement) return;
 
-      setFormData(prev => ({
-        ...prev,
-        restaurant_name: place.name || '',
-        address: place.formatted_address || '',
-        google_place_id: place.place_id || '',
-        google_rating: place.rating || 0,
-        google_maps_url: mapsUrl,
-        google_photo_url: photoUrl
-      }));
+    // 2. Create the element
+    const acElement = new google.maps.places.PlaceAutocompleteElement();
 
-      setPhotoPreview(photoUrl);
+    // 3. Configure it
+    acElement.id = "place-ac";
+    // CRITICAL: Force height/width so it doesn't collapse
+    acElement.style.width = '100%';
+    acElement.style.height = '100%'; 
+
+    // 4. Clear the container and append
+    const container = autocompleteInputRef.current;
+    container.innerHTML = ''; 
+    container.appendChild(acElement);
+
+    // 5. Add the listener
+    acElement.addEventListener('gmp-placeselect', async (event: any) => {
+        const place = event.place;
+        
+        // Fetch fields
+        await place.fetchFields({ 
+            fields: ['displayName', 'formattedAddress', 'location', 'photos', 'rating', 'id'] 
+        });
+
+        const name = place.displayName;
+        const placeId = place.id;
+        const rating = place.rating || 0;
+        const address = place.formattedAddress || '';
+        const photoUrl = place.photos?.[0]?.getURI({ maxWidth: 400 }) || '';
+        
+        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${placeId}`;
+
+        // Update Form State
+        setFormData(prev => ({
+            ...prev,
+            restaurant_name: name || '',
+            address: address,
+            google_place_id: placeId || '',
+            google_rating: rating,
+            google_maps_url: mapsUrl,
+            google_photo_url: photoUrl
+        }));
+
+        if (photoUrl) {
+            setPhotoPreview(photoUrl);
+        }
     });
-  }, [autocomplete]);
+
+}, [showAddModal, scriptLoaded]); // <--- CRITICAL: Added scriptLoaded here // <-- CRITICAL: Only run when the modal state changes to 'true'
+
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
@@ -225,6 +273,7 @@ const App: React.FC = () => {
       date_visited: new Date().toISOString().split('T')[0],
       dishes_ordered: '',
       rating: 5,
+      value_rating: 5,
       notes: '',
       google_place_id: '',
       google_rating: 0,
@@ -245,6 +294,7 @@ const App: React.FC = () => {
       date_visited: restaurant.date_visited,
       dishes_ordered: restaurant.dishes_ordered,
       rating: restaurant.rating,
+      value_rating: restaurant.value_rating || 5,
       notes: restaurant.notes || '',
       google_place_id: restaurant.google_place_id || '',
       google_rating: restaurant.google_rating || 0,
@@ -483,7 +533,21 @@ const App: React.FC = () => {
                         <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
                         <span className="font-semibold text-lg">{restaurant.rating}/10</span>
                       </div>
-                      {restaurant.google_rating && restaurant.google_rating > 0 && (
+
+                      {restaurant.value_rating && (
+                          <div className={`flex items-center gap-1 px-2 py-1 rounded-md border ${
+                              restaurant.value_rating <= 3 ? 'bg-red-50 border-red-200 text-red-700' :
+                              restaurant.value_rating <= 6 ? 'bg-gray-100 border-gray-200 text-gray-600' :
+                              'bg-green-50 border-green-100 text-green-700'
+                          }`}>
+                              <span className="font-bold">£</span>
+                              <span className="text-sm font-medium">
+                                  {restaurant.value_rating}/10 Value
+                              </span>
+                          </div>
+                      )}
+                      
+                      {restaurant.google_rating > 0 && (
                         <div className="flex items-center gap-1 text-sm text-gray-600">
                           <span>Google:</span>
                           <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
@@ -540,14 +604,11 @@ const App: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Restaurant Name *
                 </label>
-                <input
-                  ref={autocompleteInputRef}
-                  type="text"
-                  value={formData.restaurant_name}
-                  onChange={(e) => setFormData({ ...formData, restaurant_name: e.target.value })}
-                  placeholder="Start typing to search Google Places..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                />
+                {/* Container where Google will inject its own search bar */}
+                  <div 
+                    ref={autocompleteInputRef as any} 
+                    className="w-full h-12 border border-gray-300 rounded-lg overflow-hidden"
+                  ></div>
                 <p className="text-xs text-gray-500 mt-1">
                   Type to search or enter manually
                 </p>
@@ -564,33 +625,51 @@ const App: React.FC = () => {
                   />
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date Visited *
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.date_visited}
-                    onChange={(e) => setFormData({ ...formData, date_visited: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Your Rating (1-10) *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={formData.rating}
-                    onChange={(e) => setFormData({ ...formData, rating: Number(e.target.value) })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              {/* 1. Date Field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date Visited *
+                </label>
+                <input
+                  type="date"
+                  value={formData.date_visited}
+                  onChange={(e) => setFormData({ ...formData, date_visited: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                />
               </div>
+
+              {/* 2. Rating Field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Overall Rating *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={formData.rating}
+                  onChange={(e) => setFormData({ ...formData, rating: Number(e.target.value) })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              {/* 3. NEW Value Field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Value (1-10)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={formData.value_rating}
+                  onChange={(e) => setFormData({ ...formData, value_rating: Number(e.target.value) })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+            </div>
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -13,6 +13,7 @@ export interface Restaurant {
   date_visited: string
   dishes_ordered: string
   rating: number
+  value_rating: number
   notes?: string
   photo_url?: string
   google_place_id?: string
